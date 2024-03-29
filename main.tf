@@ -29,6 +29,23 @@ module "nginx_vpc" {
   }
 }
 
+
+module "nginx_autoscaling" {
+  source  = "terraform-aws-modules/autoscaling/aws"
+  version = "7.4.1"
+
+  name = "${var.environment.name}-nginx"
+
+  min_size            = var.asg_min
+  max_size            = var.asg_max
+  vpc_zone_identifier = module.nginx_vpc.public_subnets
+  target_group_arns   = [aws_lb_target_group.nginx_target_group.arn]
+  security_groups     = [module.nginx_sg.security_group_id]
+  instance_type       = var.instance_type
+  image_id            = data.aws_ami.app_ami.id
+}
+
+
 resource "aws_lb" "nginx_alb" {
   name               = "${var.environment.name}-nginx-alb"
   internal           = false
