@@ -29,53 +29,47 @@ module "nginx_vpc" {
   }
 }
 
-module "nginx_autoscaling" {
-  source  = "terraform-aws-modules/autoscaling/aws"
-  version = "7.4.1"
-
-  name = "${var.environment.name}-nginx"
-
-  min_size            = var.asg_min
-  max_size            = var.asg_max
-  vpc_zone_identifier = module.nginx_vpc.public_subnets
-  security_groups     = [module.nginx_sg.security_group_id]
-  instance_type       = var.instance_type
-  image_id            = data.aws_ami.app_ami.id
-}
-
-module "nginx_alb" {
-  source  = "terraform-aws-modules/alb/aws"
-  version = "9.8.0"
-
-  name = "${var.environment.name}-nginx-alb"
-
+resource "aws_lb" "nginx_alb" {
+  name               = "${var.environment.name}-nginx-alb"
+  internal           = false
   load_balancer_type = "application"
-
-  vpc_id             = module.nginx_vpc.vpc_id
-  subnets            = module.nginx_vpc.public_subnets
   security_groups    = [module.nginx_sg.security_group_id]
-
-  target_groups = [
-    {
-      name_prefix      = "${var.environment.name}-"
-      backend_protocol = "HTTP"
-      backend_port     = 80
-      target_type      = "instance"
-    }
-  ]
-
-  listeners = [
-    {
-      port               = 80
-      protocol           = "HTTP"
-      target_group_index = 0
-    }
-  ]
+  subnets            = module.nginx_vpc.public_subnets
 
   tags = {
     Environment = var.environment.name
-    }
+  }
 }
+
+resource "aws_lb_target_group" "nginx_target_group" {
+  name     = "${var.environment.name}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = module.nginx_vpc.vpc_id
+
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/"
+    port                = "traffic-port"
+    timeout             = 3
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    matcher             = "200-399"
+  }
+}
+
+resource "aws_lb_listener" "listener" {
+  load_balancer_arn = aws_lb.nginx_alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.nginx_target_group.arn
+  }
+}
+
 
 module "nginx_sg" {
   source  = "terraform-aws-modules/security-group/aws"
