@@ -3,12 +3,12 @@ data "aws_ami" "app_ami" {
 
     filter {
         name  = "name"
-        value = [var.ami_filter.name]
+        values = [var.ami_filter.name]
     }
 
     filter {
         name  = "virtualization-type"
-        value = ["hvm"]
+        values = ["hvm"]
     }
 
     owners    = [var.ami_filter.owner]
@@ -23,7 +23,7 @@ module "nginx_vpc" {
   azs         = ["ap-southeast-1a","ap-southeast-1b","ap-southeast-1c"]
   public_subnets = ["${var.environment.network_prefix}.101.0/24", "${var.environment.network_prefix}.102.0/24", "${var.environment.network_prefix}.103.0/24"]
   
-  tag         = {
+  tags         = {
     Terraform = true
     Environment = var.environment.name
   }
@@ -38,7 +38,6 @@ module "nginx_autoscaling" {
   min_size            = var.asg_min
   max_size            = var.asg_max
   vpc_zone_identifier = module.nginx_vpc.public_subnets
-  target_group_arns   = module.nginx_alb.target_group_arns
   security_groups     = [module.nginx_sg.security_group_id]
   instance_type       = var.instance_type
   image_id            = data.aws_ami.app_ami.id
@@ -65,7 +64,7 @@ module "nginx_alb" {
     }
   ]
 
-  http_tcp_listeners = [
+  listeners = [
     {
       port               = 80
       protocol           = "HTTP"
@@ -75,7 +74,8 @@ module "nginx_alb" {
 
   tags = {
     Environment = var.environment.name
-  }
+    }
+}
 
 module "nginx_sg" {
   source  = "terraform-aws-modules/security-group/aws"
@@ -88,6 +88,6 @@ module "nginx_sg" {
   egress_rules = ["all-all"]
   egress_cidr_blocks = ["0.0.0.0/0"]
 }
-}
+
 
 
